@@ -1,0 +1,31 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system deps required by some PDF libs (adjust as needed)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpoppler-cpp-dev \
+    poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt ./
+# Retry pip install a few times to mitigate transient network timeouts during image build
+RUN set -eux; \
+    i=0; \
+    until [ "$i" -ge 5 ]; do \
+        pip install --no-cache-dir -r requirements.txt && break || true; \
+        i=$((i+1)); \
+        echo "pip install failed, retrying ($i/5)"; \
+        sleep 5; \
+    done; \
+    if [ "$i" -ge 5 ]; then echo "pip install failed after 5 attempts"; exit 1; fi
+
+COPY . .
+
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8000
+
+EXPOSE 8000
+
+CMD ["uvicorn", "src.api.server:app", "--host", "0.0.0.0", "--port", "8000"]
